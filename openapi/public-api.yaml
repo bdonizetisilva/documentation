@@ -1,0 +1,1057 @@
+openapi: 3.0.1
+info:
+  title: Inventa's integration API
+  description: "# Introduction\nThis is Inventa's integration API that can be used\
+    \ by supplier to integrate \ntheir ERP with Inventa's applications. Through this\
+    \ API is possible to:\n- Receive new orders\n- Confirm an order\n- Add invoice\
+    \ to an order (XML and PDF files)\n- Add tracking information to an order\n- Request\
+    \ a review process for the order (e.g. Out Of Stock, Wrong Address, Missing Information)\n\
+    - Set an order as delivered"
+  version: "1.0"
+  x-logo:
+    url: https://inventa.shop/logo-inventa.png
+servers:
+- url: https://apigw.inventa.dev.br
+  description: Development URL
+- url: https://apigw.inventashop.com.br
+  description: Production URL
+paths:
+  /v1/webhooks/{uuid}/retry:
+    post:
+      tags:
+      - Webhooks
+      summary: Retry webhook
+      description: This endpoint restarts the webhook delivery process for the webhook
+        with the given UUID
+      operationId: retryWebhook
+      parameters:
+      - name: uuid
+        in: path
+        description: Webhook's unique identifier
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "202":
+          description: When the delivery process was restarted
+        "404":
+          description: Webhook does not exist
+      security:
+      - oauth2: []
+  /v1/webhook-configs:
+    get:
+      tags:
+      - Webhook Configurations
+      summary: List webhook configurations
+      description: This endpoint returns all the webhooks configurations
+      operationId: findWebhookConfig
+      responses:
+        "200":
+          description: List of existing webhook configurations
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataListResponseWebhookConfigResponse'
+      security:
+      - oauth2: []
+    post:
+      tags:
+      - Webhook Configurations
+      summary: Create webhook configuration
+      description: This endpoint creates new configuration to send webhooks
+      operationId: createWebhookConfig
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateWebhookConfigRequest'
+        required: true
+      responses:
+        "201":
+          description: The configuration has been created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WebhookConfigResponse'
+        "400":
+          description: Some payload information is invalid
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WebhookConfigResponse'
+      security:
+      - oauth2: []
+  /v1/webhook-configs/{uuid}:
+    delete:
+      tags:
+      - Webhook Configurations
+      summary: Delete webhook configuration
+      description: This endpoint deletes a webhook configuration
+      operationId: deleteWebhookConfig
+      parameters:
+      - name: uuid
+        in: path
+        description: Webhook Configuration's unique identifier
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "204":
+          description: The webhook configuration was deleted
+        "404":
+          description: The webhook configuration does not exist
+      security:
+      - oauth2: []
+    patch:
+      tags:
+      - Webhook Configurations
+      summary: Update webhook configuration
+      description: This endpoint updates a webhook configuration
+      operationId: updateWebhookConfig
+      parameters:
+      - name: uuid
+        in: path
+        description: Webhook Configuration's unique identifier
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateWebhookConfigRequest'
+        required: true
+      responses:
+        "204":
+          description: The webhook configuration was updated
+        "404":
+          description: The webhook configuration does not exist
+      security:
+      - oauth2: []
+  /v1/orders/{uuid}/tracking:
+    patch:
+      tags:
+      - Orders
+      summary: Add tracking information
+      description: Add tracking information to an order.
+      operationId: uploadShipping
+      parameters:
+      - name: uuid
+        in: path
+        description: Orders's unique identifier
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateTrackingRequest'
+        required: true
+      responses:
+        "204":
+          description: The order was updated to SHIPPED
+        "404":
+          description: The order with given uuid was not found
+        "400":
+          description: |-
+            This can be caused by:
+            - Order is cancelled
+            - Order does not allow transition to SHIPPED
+      security:
+      - oauth2: []
+  /v1/orders/{uuid}/invoice:
+    patch:
+      tags:
+      - Orders
+      summary: Add invoice
+      description: This endpoint receives both XML and DANFE urls for the given order
+        and changes its status to INVOICE_RECEIVED
+      operationId: uploadInvoice
+      parameters:
+      - name: uuid
+        in: path
+        description: Orders's unique identifier
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateInvoiceInfoRequest'
+        required: true
+      responses:
+        "400":
+          description: |-
+            This can be caused by:
+            - Order is cancelled
+            - Unable to download the files
+            - The invoice's XML file is invalid
+            - The order has already been consolidated
+        "204":
+          description: The order was updated to INVOICED_RECEIVED status
+        "404":
+          description: The order with given uuid was not found
+      security:
+      - oauth2: []
+  /v1/orders/{uuid}/confirmation:
+    patch:
+      tags:
+      - Orders
+      summary: Confirm order
+      description: This endpoint confirms an order that was previously waiting confirmation
+        status
+      operationId: confirmOrder
+      parameters:
+      - name: uuid
+        in: path
+        description: Orders's unique identifier
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "400":
+          description: The order can not be confirmed
+        "204":
+          description: The order has been confirmed
+        "404":
+          description: The order with given uuid was not found
+      security:
+      - oauth2: []
+  /v1/webhooks:
+    get:
+      tags:
+      - Webhooks
+      summary: List webhooks
+      description: "Returns all your webhooks in a paginated result based on the filters\
+        \ provided through query parameters. The default response is ordered by the\
+        \ createdAt field in ASC order, but you can changethe order using ASC or DESC\
+        \ and the field that you want to apply the sort."
+      operationId: getWebhooks
+      parameters:
+      - name: page
+        in: query
+        description: Page number
+        required: false
+        schema:
+          type: integer
+          format: int32
+          default: 0
+      - name: size
+        in: query
+        description: Maximum size of the page
+        required: false
+        schema:
+          maximum: 100
+          minimum: 1
+          type: integer
+          format: int32
+          default: 15
+      - name: type
+        in: query
+        description: Webhook type that should be returned
+        required: false
+        schema:
+          type: string
+          enum:
+          - ORDER_UPDATED
+          - ORDER_NEW
+          - ORDER_CONFIRMED
+          - ORDER_INVOICE_RECEIVED
+          - ORDER_SHIPPED
+          - ORDER_DELIVERED
+          - ORDER_CANCELLED
+          - ORDER_COMMISSION_UPDATED
+          - ORDER_UNDER_REVIEW
+          - ORDER_EDITED
+      - name: sourceUUID
+        in: query
+        description: UUID of the resource that generated the webhook
+        required: false
+        schema:
+          type: string
+          format: uuid
+      - name: startDate
+        in: query
+        description: Minimum creation date of the webhook
+        required: false
+        schema:
+          type: string
+          format: date-time
+      - name: endDate
+        in: query
+        description: Maximum creation date of the webhook
+        required: false
+        schema:
+          type: string
+          format: date-time
+      - name: deliveryStatus
+        in: query
+        description: Delivery status to be returned
+        required: false
+        schema:
+          type: string
+          enum:
+          - PENDING
+          - DELIVERED
+          - FAILED
+      - name: sort
+        in: query
+        description: Field used to sort the result
+        required: false
+        schema:
+          type: string
+          enum:
+          - CreatedAt
+          - DeliveredAt
+          - UpdatedAt
+          default: CreatedAt
+      - name: direction
+        in: query
+        description: Result's sort direction
+        required: false
+        schema:
+          type: string
+          enum:
+          - ASC
+          - DESC
+          default: ASC
+      responses:
+        "200":
+          description: Returns a list of webhook for a given vendor
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PagedDataListResponseWebhookResponseWebhook'
+      security:
+      - oauth2: []
+  /v1/webhooks/{uuid}:
+    get:
+      tags:
+      - Webhooks
+      summary: Single webhook
+      description: This endpoint returns a single webhook with the given UUID
+      operationId: singleWebhook
+      parameters:
+      - name: uuid
+        in: path
+        description: Webhook's unique identifier
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "200":
+          description: Returns a webhook
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WebhookResponse'
+        "404":
+          description: Webhook does not exist
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WebhookResponse'
+      security:
+      - oauth2: []
+  /v1/orders:
+    get:
+      tags:
+      - Orders
+      summary: List orders
+      description: "Returns all your orders in a paginated result based on the filters\
+        \ provided through query parameters. The default response is ordered by the\
+        \ availableAt field in DESC order, but you can change the order using ASC\
+        \ or DESC and the field that you want to apply the sort."
+      operationId: getOrders
+      parameters:
+      - name: page
+        in: query
+        description: Page number
+        required: false
+        schema:
+          type: integer
+          format: int32
+          default: 0
+      - name: size
+        in: query
+        description: Maximum size of the page
+        required: false
+        schema:
+          maximum: 100
+          minimum: 1
+          type: integer
+          format: int32
+          default: 20
+      - name: availableAtStart
+        in: query
+        description: Minimum available date of the order
+        required: false
+        schema:
+          type: string
+          format: date-time
+      - name: availableAtEnd
+        in: query
+        description: Maximum available date of the order
+        required: false
+        schema:
+          type: string
+          format: date-time
+      - name: updatedAtStart
+        in: query
+        description: Minimum update date of the order
+        required: false
+        schema:
+          type: string
+          format: date-time
+      - name: updatedAtEnd
+        in: query
+        description: Maximum update date of the order
+        required: false
+        schema:
+          type: string
+          format: date-time
+      - name: status
+        in: query
+        description: Order status to be returned
+        required: false
+        schema:
+          type: string
+          enum:
+          - TO_BE_CONFIRMED
+          - CONFIRMED
+          - INVOICE_RECEIVED
+          - SHIPPED
+          - DELIVERED
+          - UNDER_REVIEW
+          - CANCELLED
+      - name: sort
+        in: query
+        description: Field used to sort the result
+        required: false
+        schema:
+          type: string
+          enum:
+          - AvailableAt
+          - CreatedAt
+          - UpdatedAt
+          default: AvailableAt
+      responses:
+        "200":
+          description: List of existing orders
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/PagedDataListResponseOrderResponseObject'
+      security:
+      - oauth2: []
+  /v1/orders/{uuid}:
+    get:
+      tags:
+      - Orders
+      summary: Single order
+      description: This endpoint fetches a single order given it's UUID
+      operationId: getOrderByUUID
+      parameters:
+      - name: uuid
+        in: path
+        description: Orders's unique identifier
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "404":
+          description: Returns 404 when no order with given uuid was found
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/OrderResponse'
+        "200":
+          description: Returns the order found
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/OrderResponse'
+      security:
+      - oauth2: []
+components:
+  schemas:
+    CreateWebhookConfigRequest:
+      required:
+      - types
+      - url
+      type: object
+      properties:
+        types:
+          type: array
+          description: List of webhook types generated by this configuration
+          items:
+            type: string
+            description: List of webhook types generated by this configuration
+            enum:
+            - ORDER_UPDATED
+            - ORDER_NEW
+            - ORDER_CONFIRMED
+            - ORDER_INVOICE_RECEIVED
+            - ORDER_SHIPPED
+            - ORDER_DELIVERED
+            - ORDER_CANCELLED
+            - ORDER_COMMISSION_UPDATED
+            - ORDER_UNDER_REVIEW
+            - ORDER_EDITED
+        url:
+          pattern: "^(https)://[-a-zA-Z0-9+&@#/%?=~_|!:,.;]*[-a-zA-Z0-9+&@#/%=~_|]"
+          type: string
+          description: Callback URL for the webhook. It should be a HTTPS URL.
+      description: Request to create a new webhook configuration
+    WebhookConfigResponse:
+      required:
+      - types
+      - url
+      - uuid
+      - vendorUUID
+      type: object
+      properties:
+        uuid:
+          type: string
+          description: Webhook configuration's unique identifier
+          format: uuid
+        vendorUUID:
+          type: string
+          format: uuid
+        types:
+          type: array
+          description: List of webhook types generated by this configuration
+          items:
+            type: string
+            description: List of webhook types generated by this configuration
+            enum:
+            - ORDER_UPDATED
+            - ORDER_NEW
+            - ORDER_CONFIRMED
+            - ORDER_INVOICE_RECEIVED
+            - ORDER_SHIPPED
+            - ORDER_DELIVERED
+            - ORDER_CANCELLED
+            - ORDER_COMMISSION_UPDATED
+            - ORDER_UNDER_REVIEW
+            - ORDER_EDITED
+        url:
+          type: string
+          description: Callback URL for the webhook
+      description: Webhook configuration
+    UpdateWebhookConfigRequest:
+      required:
+      - types
+      - url
+      type: object
+      properties:
+        types:
+          type: array
+          description: List of webhook types generated by this configuration
+          items:
+            type: string
+            description: List of webhook types generated by this configuration
+            enum:
+            - ORDER_UPDATED
+            - ORDER_NEW
+            - ORDER_CONFIRMED
+            - ORDER_INVOICE_RECEIVED
+            - ORDER_SHIPPED
+            - ORDER_DELIVERED
+            - ORDER_CANCELLED
+            - ORDER_COMMISSION_UPDATED
+            - ORDER_UNDER_REVIEW
+            - ORDER_EDITED
+        url:
+          pattern: "^(https)://[-a-zA-Z0-9+&@#/%?=~_|!:,.;]*[-a-zA-Z0-9+&@#/%=~_|]"
+          type: string
+          description: Callback URL for the webhook. It should be a HTTPS URL.
+      description: Request to update a webhook configuration
+    UpdateTrackingRequest:
+      required:
+      - carrierName
+      - shippingDate
+      type: object
+      properties:
+        trackingCode:
+          maxLength: 50
+          minLength: 3
+          type: string
+        trackingUrl:
+          maxLength: 500
+          minLength: 15
+          pattern: "^(http|https)://[-a-zA-Z0-9+&@#/%?=~_|!:,.;]*[-a-zA-Z0-9+&@#/%=~_|]"
+          type: string
+        carrierName:
+          maxLength: 150
+          minLength: 3
+          type: string
+        shippingDate:
+          type: string
+          format: date-time
+    UpdateInvoiceInfoRequest:
+      required:
+      - danfeUrl
+      - xmlUrl
+      type: object
+      properties:
+        xmlUrl:
+          pattern: "^(https)://[-a-zA-Z0-9+&@#/%?=~_|!:,.;]*[-a-zA-Z0-9+&@#/%=~_|]"
+          type: string
+        danfeUrl:
+          pattern: "^(https)://[-a-zA-Z0-9+&@#/%?=~_|!:,.;]*[-a-zA-Z0-9+&@#/%=~_|]"
+          type: string
+    JsonNode:
+      type: object
+      description: "Entity state that triggered the webhook, identical to the GET\
+        \ of the entity"
+    PagedDataListResponseWebhookResponseWebhook:
+      required:
+      - data
+      - page
+      - size
+      - totalPages
+      - totalSize
+      type: object
+      properties:
+        data:
+          type: array
+          description: Result list
+          items:
+            $ref: '#/components/schemas/WebhookResponse'
+        page:
+          type: integer
+          description: Actual page number
+          format: int32
+        size:
+          type: integer
+          description: Actual page size
+          format: int32
+        totalPages:
+          type: integer
+          description: Total page number
+          format: int32
+        totalSize:
+          type: integer
+          description: Total elements number
+          format: int64
+    WebhookResponse:
+      required:
+      - createdAt
+      - data
+      - deliveryAttempts
+      - deliveryStatus
+      - type
+      - updatedAt
+      - uuid
+      type: object
+      properties:
+        uuid:
+          type: string
+          description: Unique identifier
+          format: uuid
+        type:
+          type: string
+          description: Type of the change
+          enum:
+          - ORDER_UPDATED
+          - ORDER_NEW
+          - ORDER_CONFIRMED
+          - ORDER_INVOICE_RECEIVED
+          - ORDER_SHIPPED
+          - ORDER_DELIVERED
+          - ORDER_CANCELLED
+          - ORDER_COMMISSION_UPDATED
+          - ORDER_UNDER_REVIEW
+          - ORDER_EDITED
+        data:
+          $ref: '#/components/schemas/JsonNode'
+        deliveryStatus:
+          type: string
+          description: Current delivery status
+          enum:
+          - PENDING
+          - DELIVERED
+          - FAILED
+        deliveryAttempts:
+          type: integer
+          description: How many delivery attempts have been executed
+          format: int32
+        deliveredAt:
+          type: string
+          description: Date when the webhook was delivered
+          format: date-time
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      description: Webhook
+    DataListResponseWebhookConfigResponse:
+      required:
+      - data
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/WebhookConfigResponse'
+    Accounting:
+      required:
+      - receivableAmount
+      - subtotal
+      - takeRate
+      - takeRateAmount
+      - total
+      - totalDiscount
+      type: object
+      properties:
+        subtotal:
+          type: number
+          description: The subtotal is the sum of all items subtotals
+          example: 1000.0
+        totalDiscount:
+          type: number
+          description: The total discount paid by the vendor applied to the order
+          example: 150.0
+        total:
+          type: number
+          description: The total is the subtotal minus discounts
+          example: 850.0
+        takeRate:
+          type: number
+          description: "Service fee paid by the vendor, in percentage"
+          example: 10.0
+        takeRateAmount:
+          type: number
+          description: "Service fee paid by the vendor, in currency. (total * takeRate)"
+          example: 85.0
+        taxes:
+          type: number
+          description: Taxes extracted from the invoice's XML (ICMS-ST + FCP-ST)
+          example: 50.0
+        freight:
+          type: number
+          description: Delivery fee paid by the customer on the checkout phase
+          example: 120.0
+        receivableAmount:
+          type: number
+          description: "The value that paid to the vendor, it is equal to total +\
+            \ taxes + freight - takeRateAmount"
+          example: 935.0
+      description: Financial information
+    Address:
+      required:
+      - city
+      - complement
+      - countryCode
+      - neighborhood
+      - number
+      - reference
+      - state
+      - street
+      - zipCode
+      type: object
+      properties:
+        zipCode:
+          type: string
+        city:
+          type: string
+        complement:
+          type: string
+        reference:
+          type: string
+        countryCode:
+          type: string
+        state:
+          type: string
+        street:
+          type: string
+        neighborhood:
+          type: string
+        number:
+          type: string
+      description: Address of the payment's billing
+    Customer:
+      required:
+      - address
+      - email
+      - name
+      - phone
+      - registrationNumber
+      - registrationType
+      - tradeName
+      type: object
+      properties:
+        name:
+          type: string
+          description: "Customer's name, also known as **Razão Social**"
+          example: Inventa LTDA
+        tradeName:
+          type: string
+          description: "Customer's trade name, also known as **Nome Fantasia**"
+          example: Inventa
+        email:
+          type: string
+          example: finance@inventa.shop
+        phone:
+          type: string
+          description: The phone contains only country code plus digits
+          example: +5511999999999
+        address:
+          $ref: '#/components/schemas/Address'
+        registrationNumber:
+          type: string
+          description: The registration number contain only the digits
+          example: "02999222000105"
+        registrationType:
+          type: string
+          description: The registration type for person is CPF and for companies CNPJ
+          example: CNPJ
+          enum:
+          - CNPJ
+          - CPF
+        stateRegistrationNumber:
+          type: string
+          description: Registration number on the customer's state
+          example: SP1234
+        taxRegime:
+          type: string
+          description: Tax regime base on the state registration
+          example: Isento
+      description: Customer that purchased on marketplace
+    EstimatedDelivery:
+      type: object
+      properties:
+        minEstimatedDeliveryDate:
+          type: string
+          description: Minimum delivery date shown to the customer at checkout
+          format: date-time
+          example: 2023-03-03T12:00:00Z
+        maxEstimatedDeliveryDate:
+          type: string
+          description: Maximum delivery date shown to the customer at checkout
+          format: date-time
+          example: 2023-03-03T12:00:00Z
+      description: Delivery estimated dates
+    Invoice:
+      type: object
+      properties:
+        xmlUrl:
+          type: string
+          description: Link for the invoice's XML
+        danfeUrl:
+          type: string
+          description: Link for the invoice's PDF
+      description: Invoice URLs
+    OrderItem:
+      required:
+      - description
+      - discountOnProduct
+      - name
+      - quantity
+      - sku
+      - unitPrice
+      type: object
+      properties:
+        sku:
+          type: string
+          description: Stock keeping unit
+          example: UN12342
+        name:
+          type: string
+          example: Disney Castle Lego
+        description:
+          type: string
+          description: Variant description
+          example: New Model
+        unitPrice:
+          type: number
+          description: "Item's unit price, after the application of discountOnProduct"
+          example: 15.0
+        quantity:
+          type: integer
+          format: int32
+          example: 10
+        discountOnProduct:
+          type: number
+          description: Discount applied to the original product unit price
+          example: 2.0
+      description: List of items purchased on this order
+    OrderResponse:
+      required:
+      - accounting
+      - availableAt
+      - billingAddress
+      - createdAt
+      - customer
+      - estimatedDeliveryDate
+      - invoice
+      - items
+      - shippingAddress
+      - shortId
+      - status
+      - tracking
+      - updatedAt
+      - uuid
+      - vendor
+      type: object
+      properties:
+        uuid:
+          type: string
+          description: Unique identifier
+          format: uuid
+          example: c157bfaa-ff3e-431a-a7bd-e9a5650a3008
+        shortId:
+          type: string
+          description: "A short id, shown to the customer on marketplace"
+          example: '#5BAA02B8'
+        status:
+          type: string
+          enum:
+          - TO_BE_CONFIRMED
+          - CONFIRMED
+          - INVOICE_RECEIVED
+          - SHIPPED
+          - DELIVERED
+          - UNDER_REVIEW
+          - CANCELLED
+        customer:
+          $ref: '#/components/schemas/Customer'
+        vendor:
+          $ref: '#/components/schemas/Vendor'
+        accounting:
+          $ref: '#/components/schemas/Accounting'
+        items:
+          type: array
+          description: List of items purchased on this order
+          items:
+            $ref: '#/components/schemas/OrderItem'
+        shippingAddress:
+          $ref: '#/components/schemas/Address'
+        billingAddress:
+          $ref: '#/components/schemas/Address'
+        tracking:
+          $ref: '#/components/schemas/Tracking'
+        invoice:
+          $ref: '#/components/schemas/Invoice'
+        estimatedDeliveryDate:
+          $ref: '#/components/schemas/EstimatedDelivery'
+        availableAt:
+          type: string
+          description: Date that the order became available for the vendor
+          format: date-time
+          example: 2023-03-03T12:00:00Z
+        cancelledAt:
+          type: string
+          description: Order's cancellation date
+          format: date-time
+          example: 2023-03-03T12:00:00Z
+        createdAt:
+          type: string
+          description: Date that the order was placed on marketplace
+          format: date-time
+          example: 2023-03-03T12:00:00Z
+        updatedAt:
+          type: string
+          description: Order's last update date
+          format: date-time
+          example: 2023-03-03T12:00:00Z
+      description: Result list
+    PagedDataListResponseOrderResponseObject:
+      required:
+      - data
+      - page
+      - size
+      - totalPages
+      - totalSize
+      type: object
+      properties:
+        data:
+          type: array
+          description: Result list
+          items:
+            $ref: '#/components/schemas/OrderResponse'
+        page:
+          type: integer
+          description: Actual page number
+          format: int32
+        size:
+          type: integer
+          description: Actual page size
+          format: int32
+        totalPages:
+          type: integer
+          description: Total page number
+          format: int32
+        totalSize:
+          type: integer
+          description: Total elements number
+          format: int64
+    Tracking:
+      type: object
+      properties:
+        code:
+          type: string
+          description: Code from carrier that can be used to track the order
+          example: QL123123423BR
+        url:
+          type: string
+          description: Website where the tracking can be done
+          example: https://websro.correios.com.br
+        carrierName:
+          type: string
+          description: Name of the company in charge of the delivery
+          example: Correios
+        shippingDate:
+          type: string
+          description: Date when the packages were shipped
+          format: date-time
+          example: 2023-03-03T12:00:00Z
+        deliveryDate:
+          type: string
+          description: Date when the packages were delivered
+          format: date-time
+          example: 2023-03-03T12:00:00Z
+        cteUrl:
+          type: string
+          description: Link for the shipping proof document
+        deliveryReceiptUrl:
+          type: string
+          description: Link for the delivery proof document
+      description: Tracking information
+    Vendor:
+      required:
+      - name
+      - registrationNumber
+      type: object
+      properties:
+        name:
+          type: string
+          description: "Vendor's name, also known as **Razão Social**"
+          example: Inventa LTDA
+        registrationNumber:
+          type: string
+          description: The registration number contain only the digits
+          example: "02999222000105"
+  securitySchemes:
+    oauth2:
+      type: oauth2
+      flows:
+        clientCredentials:
+          tokenUrl: /oauth2/token
+          scopes:
+            order-management/orders: Access to order resources
+            integration/webhooks: Access to webhook resources
+            integration/webhook-configs: Access to webhook resources
